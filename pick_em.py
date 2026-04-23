@@ -4,6 +4,7 @@ from random import randint
 from typing import List, Dict, Tuple, Union
 
 from flask import Flask, request, make_response, jsonify, Response
+from flask.typing import ResponseReturnValue
 from flask_cors import CORS
 
 Option = namedtuple('Option', ['name', 'start', 'weight', 'category'])
@@ -27,24 +28,24 @@ with open('db.json') as in_:
 
 
 @app.get('/')
-def index():
+def index() -> ResponseReturnValue:
     return '<div>Hello World</div>'
 
 
 @app.get('/categories')
-def categories() -> List[str]:
+def categories() -> ResponseReturnValue:
     return [*db.keys()]
 
 
 @app.get('/categories/<string:category>')
-def get_category(category: str) -> Dict[str, str | Dict[str, str]]:
+def get_category(category: str) -> ResponseReturnValue:
     if category not in db:
         return {'name': category, 'choices': []}
     return {'name': category, 'choices': db[category]}
 
 
 @app.get('/categories/pick')
-def pick() -> Union[Dict[str, str], Response]:
+def pick() -> ResponseReturnValue:
     cats = request.args.getlist('categories')
     i = request.args.get('interest', 'low')
     e = request.args.get('effort', 'low')
@@ -92,7 +93,7 @@ def pick_item(options: List[Option]) -> Option:
 
 
 @app.delete('/categories/<string:category>/remove/<string:name>')
-def remove(category, name: str) -> tuple[dict, int] | dict[str, str]:
+def remove(category, name: str) -> ResponseReturnValue:
     name = name.replace('+', ' ')
     indices = {d['name']: i for i, d in enumerate(db.get(category, []))}
     if name not in indices:
@@ -105,7 +106,7 @@ def remove(category, name: str) -> tuple[dict, int] | dict[str, str]:
 
 
 @app.put('/categories/<string:category>/edit/<string:name>')
-def edit(category, name: str) -> tuple[dict[str, str], int]:
+def edit(category, name: str) -> ResponseReturnValue:
     name = name.replace('+', ' ')
     item = next(filter(lambda d: d[NAME] == name, db[category]), None)
     if item is None:
@@ -117,7 +118,7 @@ def edit(category, name: str) -> tuple[dict[str, str], int]:
 
 
 @app.post('/categories/<string:category>/add/<string:name>')
-def add_category(category, name: str) -> tuple[dict[str, str], int]:
+def add_category(category, name: str) -> ResponseReturnValue:
     if not category or not name:
         return {'msg': '"category" and "name" must be provided'}, 400
     if INTEREST not in request.json or EFFORT not in request.json:
@@ -133,7 +134,7 @@ def add_category(category, name: str) -> tuple[dict[str, str], int]:
 
 # @TODO: change "bulk_add" to "add" once old func is deprecated
 @app.post('/categories/bulk_add')
-def bulk_add_to_category() -> Tuple[dict[str, str], int]:
+def bulk_add_to_category() -> ResponseReturnValue:
     if type(request.json) is not list:
         return {'msg': 'list of "category" "option" pairs must be provided in '
                        'body'}, 400
