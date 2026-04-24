@@ -20,11 +20,12 @@ INTEREST = 'interest'
 EFFORT = 'effort'
 
 CATEGORY = 'category'
+CHOICES = 'choices'
 CATEGORIES = 'categories'
 OPTION = 'option'
 
 with open('db.json') as in_:
-    db = {e[NAME]: e['choices'] for e in json.load(in_)}
+    db = {e[NAME]: e[CHOICES] for e in json.load(in_)}
 
 
 @app.get('/')
@@ -40,8 +41,8 @@ def categories() -> ResponseReturnValue:
 @app.get('/categories/<string:category>')
 def get_category(category: str) -> ResponseReturnValue:
     if category not in db:
-        return {'name': category, 'choices': []}
-    return {'name': category, 'choices': db[category]}
+        return {'name': category, CHOICES: []}
+    return {'name': category, CHOICES: db[category]}
 
 
 @app.get('/categories/pick')
