@@ -1,28 +1,18 @@
 import json
 from collections import namedtuple
 from random import randint
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict
 
 from flask import Flask, request, make_response, jsonify, Response
 from flask.typing import ResponseReturnValue
 from flask_cors import CORS
 
+from constants import *
+
 Option = namedtuple('Option', ['name', 'start', 'weight', 'category'])
 
 app = Flask(__name__)
 CORS(app)
-
-tiers = ['low', 'medium', 'high']
-weights = dict(zip(tiers, [1, 3, 12]))
-
-NAME = "name"
-INTEREST = 'interest'
-EFFORT = 'effort'
-
-CATEGORY = 'category'
-CHOICES = 'choices'
-CATEGORIES = 'categories'
-OPTION = 'option'
 
 with open('db.json') as in_:
     db = {e[NAME]: e[CHOICES] for e in json.load(in_)}
@@ -50,7 +40,7 @@ def pick() -> ResponseReturnValue:
     cats = request.args.getlist('categories')
     i = request.args.get('interest', 'low')
     e = request.args.get('effort', 'low')
-    if not cats or i not in tiers or e not in tiers:
+    if not cats or i not in TIERS or e not in TIERS:
         return make_response(jsonify(error="Invalid  categories, interest or "
                                            "effort selection"), 400)
 
@@ -63,8 +53,8 @@ def pick() -> ResponseReturnValue:
 
 
 def get_options(interest, effort: str, cats: List[str]) -> List[Option]:
-    i = {*tiers[tiers.index(interest):]}
-    e = {*tiers[:tiers.index(effort) + 1]}
+    i = {*TIERS[TIERS.index(interest):]}
+    e = {*TIERS[:TIERS.index(effort) + 1]}
     options: List[Option] = []
     for c in cats:
         for d in db.get(c, []):
@@ -72,7 +62,7 @@ def get_options(interest, effort: str, cats: List[str]) -> List[Option]:
                 continue
             start = options[-1].start + options[-1].weight if options else 0
             # @TODO: is this how I want to handle interest < effort
-            wght = max(1, weights[d['interest']] // weights[d['effort']])
+            wght = max(1, WEIGHTS[d['interest']] // WEIGHTS[d['effort']])
             options.append(Option(name=d['name'], start=start, weight=wght,
                                   category=c))
     return options
