@@ -44,7 +44,6 @@ def categories() -> ResponseReturnValue:
 
 @app.get('/categories/<string:category>')
 def get_category(category: str) -> ResponseReturnValue:
-    print('hit endpoint')
     response = table.query(
         IndexName="category",
         KeyConditionExpression=Key(CATEGORY_ID).eq(category),
@@ -79,13 +78,15 @@ def get_options(interest, effort: str, cats: List[str]) -> List[Option]:
     e = {*TIERS[:TIERS.index(effort) + 1]}
     options: List[Option] = []
     for c in cats:
-        for d in db.get(c, []):
-            if not (d['interest'] in i and d['effort'] in e):
+        # @TODO: remove warnings
+        category: List[Dict[str, str]] = get_category(c)[CHOICES]
+        for d in category:
+            if not (d[INTEREST] in i and d[EFFORT] in e):
                 continue
             start = options[-1].start + options[-1].weight if options else 0
             # @TODO: is this how I want to handle interest < effort
-            wght = max(1, WEIGHTS[d['interest']] // WEIGHTS[d['effort']])
-            options.append(Option(name=d['name'], start=start, weight=wght,
+            wght = max(1, WEIGHTS[d[INTEREST]] // WEIGHTS[d[EFFORT]])
+            options.append(Option(name=d[NAME], start=start, weight=wght,
                                   category=c))
     return options
 
@@ -108,13 +109,19 @@ def pick_item(options: List[Option]) -> Option:
 @app.delete('/categories/<string:category>/remove/<string:name>')
 def remove(category, name: str) -> ResponseReturnValue:
     name = name.replace('+', ' ')
-    indices = {d['name']: i for i, d in enumerate(db.get(category, []))}
-    if name not in indices:
-        return db, 404
-    del db[category][indices[name]]
-    if not db[category]:
-        del db[category]
-    dump_db()
+    response = table.query(
+        IndexName=CATEGORY,
+        KeyConditionExpression=Key(CATEGORY_ID).eq(category),
+        FilterExpression=Attr(USER_ID).eq(user_id) & Attr(NAME).eq(name),
+        ProjectionExpression="user_id, created_at"
+    )
+    items = response.get(ITEMS, [])
+    if not items:
+        return {'msg': f'name {name} not found in {category}'}, 404
+    for item in items:
+        table.delete_item(
+            Key={USER_ID: item[USER_ID], CREATED_AT: item[CREATED_AT]}
+        )
     return {'msg': f'successfully removed {name} from {category}'}
 
 
@@ -152,8 +159,9 @@ def bulk_add_to_category() -> ResponseReturnValue:
         return {'msg': 'list of "category" "option" pairs must be provided in '
                        'body'}, 400
 
-    warnings = _bulk_add_options(request.json)
+    return {'msg': NotImplemented}, 404
 
+    warnings = _bulk_add_options(request.json)
     if len(warnings) == len(request.json):
         return {'msg': 'failed to add any options', 'warnings': warnings}, 422
     if warnings:
@@ -163,31 +171,7 @@ def bulk_add_to_category() -> ResponseReturnValue:
 
 
 def _bulk_add_options(options: List[Dict]) -> List[str]:
-    warnings = []
-    for obj in options:
-        if (cat := obj.get(CATEGORY)) is None or (option := obj.get(OPTION)) \
-                is None:
-            warnings.append(f'failed to add {obj}. Missing category or '
-                            f'option')
-            continue
-        if NAME not in option or INTEREST not in option or EFFORT not in \
-                option:
-            warnings.append('failed to add to category {cat} Invalid option. '
-                            'Missing name, interest, or effort')
-            continue
-
-        if cat not in db:
-            db[cat] = [option]
-            continue
-
-        if (existing_option := [i for i, opt in enumerate(db[cat]) if
-                                opt[NAME] == option[NAME]]):
-            db[cat][existing_option.pop()] = option
-            continue
-
-        db[cat].append(option)
-    dump_db()
-    return warnings
+    return NotImplemented
 
 
 def dump_db():
