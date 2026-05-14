@@ -26,10 +26,6 @@ CORS(app)
 with open('.env') as env_file:
     user_id = env_file.readline().strip()
 
-with open('db.json') as in_:
-    db = {e[NAME]: e[CHOICES] for e in json.load(in_)}
-
-
 @app.get('/')
 def index() -> ResponseReturnValue:
     return '<div>Hello World</div>'
