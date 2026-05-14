@@ -1,7 +1,9 @@
+from datetime import datetime, timezone
 import json
 from collections import namedtuple
 from random import randint
 from typing import List, Dict
+from uuid import uuid4
 
 import boto3
 from boto3.dynamodb.conditions import Key, Attr
@@ -49,9 +51,7 @@ def get_category(category: str) -> ResponseReturnValue:
         KeyConditionExpression=Key(CATEGORY_ID).eq(category),
         FilterExpression=Attr(USER_ID).eq(user_id),
         ProjectionExpression="#n, effort, interest",
-        ExpressionAttributeNames={
-            "#n": NAME  # 'name' can be safely aliased (defensive practice)
-        }
+        ExpressionAttributeNames={"#n": NAME}
     )
     return {NAME: category, CHOICES: response.get(ITEMS, [])}
 
@@ -128,27 +128,51 @@ def remove(category, name: str) -> ResponseReturnValue:
 @app.put('/categories/<string:category>/edit/<string:name>')
 def edit(category, name: str) -> ResponseReturnValue:
     name = name.replace('+', ' ')
-    item = next(filter(lambda d: d[NAME] == name, db[category]), None)
+    response = table.query(
+        IndexName=CATEGORY,
+        KeyConditionExpression=Key(CATEGORY_ID).eq(category),
+        FilterExpression=Attr(USER_ID).eq(user_id) & Attr(NAME).eq(name),
+    )
+
+    item = response.get(ITEMS, [None])[0]
     if item is None:
-        return {"msg": f'name {name} not found in {category}'}, 404
-    item[INTEREST] = request.json.get(INTEREST, item[INTEREST])
-    item[EFFORT] = request.json.get(EFFORT, item[EFFORT])
-    dump_db()
+        return {"msg": f"name {name} not found in {category}"}, 404
+    i = request.json.get(INTEREST, item[INTEREST])
+    e = request.json.get(EFFORT, item[EFFORT])
+    update_expression = 'SET interest = :i, effort = :e'
+    expression_values = {':i': i, ':e': e}
+
+    table.update_item(
+        Key={
+            USER_ID: item[USER_ID],
+            CREATED_AT: item[CREATED_AT],
+        },
+        UpdateExpression=update_expression,
+        ExpressionAttributeValues=expression_values,
+        ReturnValues="UPDATED_NEW",
+    )
     return {'msg': f'successfully updated {name} in {category}'}, 202
 
 
 @app.post('/categories/<string:category>/add/<string:name>')
 def add_category(category, name: str) -> ResponseReturnValue:
+    data = request.get_json(silent=True)
+    if data is None:
+        return {'msg': 'JSON body required'}, 400
     if not category or not name:
         return {'msg': '"category" and "name" must be provided'}, 400
-    if INTEREST not in request.json or EFFORT not in request.json:
+    if INTEREST not in data or EFFORT not in data:
         return {'msg': 'fields "interest" and "effort" are required'}, 400
+
     name = name.replace('+', ' ')
-    item = {NAME: name, **request.json}
-    choices = db.get(category, [])
-    choices.append(item)
-    db[category] = choices
-    dump_db()
+    item = {
+       USER_ID: user_id,
+       CREATED_AT: f"{datetime.now(timezone.utc).isoformat()}#{uuid4()}",
+       CATEGORY_ID: category,
+       NAME: name,
+       **data
+    }
+    table.put_item(Item=item)
     return {'msg': f'successfully added {name} to {category}'}, 202
 
 
@@ -172,13 +196,6 @@ def bulk_add_to_category() -> ResponseReturnValue:
 
 def _bulk_add_options(options: List[Dict]) -> List[str]:
     return NotImplemented
-
-
-def dump_db():
-    with open('db.json', 'w') as out:
-        json.dump([{"name": name_, "choices": choices} for
-                   name_, choices in db.items()], out,
-                  indent=2)
 
 
 if __name__ == '__main__':
