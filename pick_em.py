@@ -3,11 +3,17 @@ from collections import namedtuple
 from random import randint
 from typing import List, Dict
 
+import boto3
+from boto3.dynamodb.conditions import Key
 from flask import Flask, request, make_response, jsonify, Response
 from flask.typing import ResponseReturnValue
 from flask_cors import CORS
 
 from constants import *
+
+TABLE_NAME = "PickEmTable"
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table(TABLE_NAME)
 
 Option = namedtuple('Option', ['name', 'start', 'weight', 'category'])
 
@@ -23,9 +29,12 @@ def index() -> ResponseReturnValue:
     return '<div>Hello World</div>'
 
 
+# @TODO: pass user_id or get from session
 @app.get('/categories')
 def categories() -> ResponseReturnValue:
-    return [*db.keys()]
+    user_id = request.cookies.get('user_id') or 'stevebot'
+    response = table.query( KeyConditionExpression=Key(USER_ID).eq(user_id))
+    return sorted(sorted({item[CATEGORY_ID] for item in response.get(ITEMS, [])}))
 
 
 @app.get('/categories/<string:category>')

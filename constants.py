@@ -1,9 +1,9 @@
-# Category constants
+# Category
 CATEGORY = 'category'
 CHOICES = 'choices'
 CATEGORIES = 'categories'
 
-# Option constants
+# Option
 OPTION = 'Option'
 NAME = "name"
 INTEREST = 'interest'
@@ -15,3 +15,10 @@ HIGH = 'high'
 
 TIERS = (LOW, MEDIUM, HIGH)
 WEIGHTS = dict(zip(TIERS, [1, 3, 12]))
+
+# DB
+USER_ID = 'user_id'
+CATEGORY_ID = 'category_id'
+
+# AWS
+ITEMS = 'Items'
