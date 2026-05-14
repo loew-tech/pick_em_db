@@ -4,7 +4,7 @@ from random import randint
 from typing import List, Dict
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
 from flask import Flask, request, make_response, jsonify, Response
 from flask.typing import ResponseReturnValue
 from flask_cors import CORS
@@ -20,6 +20,10 @@ Option = namedtuple('Option', ['name', 'start', 'weight', 'category'])
 app = Flask(__name__)
 CORS(app)
 
+# @TODO: pass user_id or get from session
+with open('.env') as env_file:
+    user_id = env_file.readline().strip()
+
 with open('db.json') as in_:
     db = {e[NAME]: e[CHOICES] for e in json.load(in_)}
 
@@ -29,19 +33,28 @@ def index() -> ResponseReturnValue:
     return '<div>Hello World</div>'
 
 
-# @TODO: pass user_id or get from session
 @app.get('/categories')
 def categories() -> ResponseReturnValue:
-    user_id = request.cookies.get('user_id') or 'stevebot'
-    response = table.query( KeyConditionExpression=Key(USER_ID).eq(user_id))
-    return sorted(sorted({item[CATEGORY_ID] for item in response.get(ITEMS, [])}))
+    response = table.query(
+        KeyConditionExpression=Key(USER_ID).eq(user_id),
+        ProjectionExpression = CATEGORY_ID
+    )
+    return sorted({item[CATEGORY_ID] for item in response.get(ITEMS, [])})
 
 
 @app.get('/categories/<string:category>')
 def get_category(category: str) -> ResponseReturnValue:
-    if category not in db:
-        return {'name': category, CHOICES: []}
-    return {'name': category, CHOICES: db[category]}
+    print('hit endpoint')
+    response = table.query(
+        IndexName="category",
+        KeyConditionExpression=Key(CATEGORY_ID).eq(category),
+        FilterExpression=Attr(USER_ID).eq(user_id),
+        ProjectionExpression="#n, effort, interest",
+        ExpressionAttributeNames={
+            "#n": NAME  # 'name' can be safely aliased (defensive practice)
+        }
+    )
+    return {NAME: category, CHOICES: response.get(ITEMS, [])}
 
 
 @app.get('/categories/pick')
