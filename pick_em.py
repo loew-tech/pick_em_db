@@ -7,11 +7,14 @@ from uuid import uuid4
 
 import boto3
 from boto3.dynamodb.conditions import Key, Attr
+from cachetools import TTLCache, cached
 from flask import Flask, request, make_response, jsonify, Response
 from flask.typing import ResponseReturnValue
 from flask_cors import CORS
 
 from constants import *
+
+cache = TTLCache(maxsize=100, ttl=60)
 
 TABLE_NAME = "PickEmTable"
 dynamodb = boto3.resource("dynamodb")
@@ -42,6 +45,11 @@ def categories() -> ResponseReturnValue:
 
 @app.get('/categories/<string:category>')
 def get_category(category: str) -> ResponseReturnValue:
+    return _get_category(category)
+
+@cached(cache)
+def _get_category(category: str) -> Dict[str, str|List[Dict[str, str]]]:
+    print('making dynamo call')
     response = table.query(
         IndexName="category",
         KeyConditionExpression=Key(CATEGORY_ID).eq(category),
@@ -75,7 +83,7 @@ def get_options(interest, effort: str, cats: List[str]) -> List[Option]:
     options: List[Option] = []
     for c in cats:
         # @TODO: remove warnings
-        category: List[Dict[str, str]] = get_category(c)[CHOICES]
+        category: List[Dict[str, str]] = _get_category(c)[CHOICES]
         for d in category:
             if not (d[INTEREST] in i and d[EFFORT] in e):
                 continue
